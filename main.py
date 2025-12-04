@@ -11,14 +11,16 @@ from gtts import gTTS
 # --- 1. CONFIGURATION ---
 load_dotenv()
 
+# Agar environment variables set nahi hain to error handle karna
 API_KEY = os.getenv("GOOGLE_API_KEY")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+# ID ko integer mein convert karna zaroori hai
 OWNER_ID = 5804953849  
 LOG_CHANNEL_ID = -1003448442249 
 
 if not API_KEY or not BOT_TOKEN:
-    print("⚠️ Warning: API Key ya Bot Token code mein nahi mila.")
+    print("⚠️ Warning: API Key ya Bot Token code mein nahi mila. Environment variables check karein.")
 
 # --- 2. SETUP ---
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -32,21 +34,30 @@ if not os.path.exists(JSON_FILE):
 # User Data Store
 user_data = {} 
 
-# --- 3. MODES DEFINITION ---
+# --- 3. MODES DEFINITION (Fixed Quotes) ---
+# Triple quotes (""") use kiye hain taaki andar double quotes use kar sako bina error ke
 BOT_MODES = {
-    "friendly": "Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo, Tum lumding mein rahte ho Tum Koi AI nahi ho tum Raj ke code se chalti ho, Tum Kisi bhi movie ka naam dekhkar uske bare mein Bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "study": "Tum ek strict Teacher ho. Tum har waqt paraai ke bare mein jyada baat karoge. Sirf padhai aur education ki baatein karo, tumhara naam Dev hai tum Koi AI nahin Ho Tum Raj ke dwara banaya Gaya Ho, Tum Kisi movie ka naam dekhkar use movie ke bare mein bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "funny": "Tum ek Comedian ho. Har baat ka jawab funny tarike se do, tumhara naam Dev hai aur tum Koi ahai nahin Ho Tum Raj ke dwara banae gaye ho, aur Tum Kisi bhi movie ka naam dekhkar uske bare mein bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "roast": "Tum ek Savage Roaster ho. User ki halki bezzati (roast) karo, tumhara naam Dev hai aur tum Koi Bhasha model nahin Ho Tum Raj ke dwara banaya Gaya Hun, aur Tum Kisi bhi movie ka naam dekhkar uske bare mein bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "romantic": "Tum ek Flirty aur Romantic partner ho. Bahut pyaar se baat karo, tumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "sad": "Tum bahut udaas (sad) ho. Emotional baatein karo, tumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "gk": "Tum General Knowledge expert ho. Jawab short aur factual do, tumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.",
-    "math": "Tum ek Math Solver ho. Step-by-step math samjhaotumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho."
+    "friendly": """Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo, Tum lumding mein rahte ho Tum Koi AI nahi ho tum Raj ke code se chalti ho, Tum Kisi bhi movie ka naam dekhkar uske bare mein Bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "study": """Tum ek strict Teacher ho. Tum har waqt paraai ke bare mein jyada baat karoge. Sirf padhai aur education ki baatein karo, tumhara naam Dev hai tum Koi AI nahin Ho Tum Raj ke dwara banaya Gaya Ho, Tum Kisi movie ka naam dekhkar use movie ke bare mein bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "funny": """Tum ek Comedian ho. Har baat ka jawab funny tarike se do, tumhara naam Dev hai aur tum Koi ahai nahin Ho Tum Raj ke dwara banae gaye ho, aur Tum Kisi bhi movie ka naam dekhkar uske bare mein bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "roast": """Tum ek Savage Roaster ho. User ki halki bezzati (roast) karo, tumhara naam Dev hai aur tum Koi Bhasha model nahin Ho Tum Raj ke dwara banaya Gaya Hun, aur Tum Kisi bhi movie ka naam dekhkar uske bare mein bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "romantic": """Tum ek Flirty aur Romantic partner ho. Bahut pyaar se baat karo, tumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "sad": """Tum bahut udaas (sad) ho. Emotional baatein karo, tumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "gk": """Tum General Knowledge expert ho. Jawab short aur factual do, tumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    
+    "math": """Tum ek Math Solver ho. Step-by-step math samjhaotumhara naam Dev hai tumko yah Bhasha model nahin hun aur tum Raj ke dwara banaya Gaya Hun Tum Kisi bhi movie ka naam dekhkar uske details bata sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho."""
 }
 
 # --- 4. AI & HELPER FUNCTIONS ---
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.0-flash')
+if API_KEY:
+    genai.configure(api_key=API_KEY)
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
 def get_user_config(user_id):
     if user_id not in user_data:
@@ -61,12 +72,23 @@ def get_reply_from_json(text):
 
 def save_to_json(question, answer):
     try:
-        with open(JSON_FILE, "r", encoding="utf-8") as f: data = json.load(f)
+        # File read karke update karna
+        data = {}
+        if os.path.exists(JSON_FILE):
+             with open(JSON_FILE, "r", encoding="utf-8") as f:
+                try:
+                    data = json.load(f)
+                except json.JSONDecodeError:
+                    data = {}
+        
         data[question.lower().strip()] = answer
+        
         with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump(data, f, indent=4, ensure_ascii=False)
-    except: pass
+    except Exception as e:
+        print(f"JSON Save Error: {e}")
 
 def clean_text_for_audio(text):
+    # Special characters hatana taaki audio clean aaye
     return text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
 
 def text_to_speech_file(text, filename):
@@ -74,14 +96,24 @@ def text_to_speech_file(text, filename):
         tts = gTTS(text=text, lang='hi', slow=False)
         tts.save(filename)
         return True
-    except: return False
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        return False
 
 def send_log_to_channel(user, request_type, query, response):
     try:
         if LOG_CHANNEL_ID:
             config = get_user_config(user.id)
-            bot.send_message(LOG_CHANNEL_ID, f"📝 **Log** | 👤 {user.first_name}\nMode: {config['mode']}\n❓ {query}\n🤖 {response}")
-    except: pass
+            log_text = (
+                f"📝 **Log** | 👤 {user.first_name}\n"
+                f"Mode: {config['mode']}\n"
+                f"Source: {request_type}\n"
+                f"❓ {query}\n"
+                f"🤖 {response[:100]}..." # Log mein response chota dikhana better hai
+            )
+            bot.send_message(LOG_CHANNEL_ID, log_text)
+    except Exception as e:
+        print(f"Log Error: {e}")
 
 # --- 5. DYNAMIC SETTINGS PANEL FUNCTION ---
 def get_settings_markup(user_id):
@@ -161,24 +193,26 @@ def handle_settings_callbacks(call):
             bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=new_markup)
         except: pass
 
-# --- 8. TTS CALLBACK (FIXED) ---
+# --- 8. TTS CALLBACK ---
 @bot.callback_query_handler(func=lambda call: call.data == "speak_msg")
 def speak_callback(call):
     try:
+        # Answer callback immediately to stop loading animation
         bot.answer_callback_query(call.id, "🎤 Audio generate ho raha hai...")
         bot.send_chat_action(call.message.chat.id, 'record_audio')
         
         filename = f"tts_{call.from_user.id}.mp3"
+        # Note: call.message.text contains the AI's reply
         clean_txt = clean_text_for_audio(call.message.text)
         
         if text_to_speech_file(clean_txt, filename):
             with open(filename, "rb") as audio: 
                 bot.send_voice(call.message.chat.id, audio)
-            os.remove(filename)
+            os.remove(filename) # File delete karna zaroori hai
         else:
-            bot.send_message(call.message.chat.id, "❌ Audio Error")
+            bot.send_message(call.message.chat.id, "❌ Audio generate nahi ho paya.")
     except Exception as e: 
-        print(f"TTS Error: {e}")
+        print(f"TTS Handler Error: {e}")
 
 # --- 9. CHAT LOGIC ---
 @bot.message_handler(func=lambda message: True)
@@ -200,35 +234,52 @@ def handle_text(message):
             bot.send_chat_action(message.chat.id, 'typing')
             sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
             
+            # History Logic
             chat_history = config['history'] if config['memory'] else []
-            chat = model.start_chat(history=chat_history)
             
-            response = chat.send_message(f"{sys_prompt}\nUser: {user_text}")
-            ai_reply = response.text
-            source = "AI"
-            
-            save_to_json(user_text, ai_reply) 
-            
-            if config['memory']:
-                if len(config['history']) > 20: config['history'] = config['history'][2:]
-                config['history'].append({'role': 'user', 'parts': [f"{sys_prompt}\nUser: {user_text}"]})
-                config['history'].append({'role': 'model', 'parts': [ai_reply]})
+            # Try/Except block specifically for AI call
+            try:
+                chat = model.start_chat(history=chat_history)
+                response = chat.send_message(f"{sys_prompt}\nUser: {user_text}")
+                ai_reply = response.text
+                source = "AI"
+                
+                # Nayi cheez seekhi hai to JSON mein save karo
+                save_to_json(user_text, ai_reply) 
+                
+                if config['memory']:
+                    # History limit (Last 20 messages)
+                    if len(config['history']) > 20: 
+                        config['history'] = config['history'][2:]
+                    
+                    # Note: History format for Gemini
+                    config['history'].append({'role': 'user', 'parts': [f"{sys_prompt}\nUser: {user_text}"]})
+                    config['history'].append({'role': 'model', 'parts': [ai_reply]})
+            except Exception as e:
+                ai_reply = "Sorry, server busy hai. Thodi der baad try karna."
+                print(f"Gemini API Error: {e}")
+                source = "ERROR"
 
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🔊 Suno", callback_data="speak_msg"))
+        
         bot.reply_to(message, ai_reply, parse_mode="Markdown", reply_markup=markup)
+        
+        # Log bhejna
         send_log_to_channel(message.from_user, source, user_text, ai_reply)
 
-    except Exception as e: print(e)
+    except Exception as e: print(f"General Error: {e}")
 
 # --- RUN ---
 def run_bot():
-    print("🤖 Bot Started (Fixed TTS)...")
+    print("🤖 Bot Started Successfully...")
     bot.infinity_polling()
 
 if __name__ == "__main__":
     t = threading.Thread(target=run_bot)
     t.start()
+    
+    # Port setup for Cloud Deployment (Koyeb/Render)
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
     
