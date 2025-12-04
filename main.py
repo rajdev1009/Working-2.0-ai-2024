@@ -8,6 +8,7 @@ import threading
 import time
 import json 
 import re 
+from datetime import datetime 
 from gtts import gTTS 
 
 # --- 1. CONFIGURATION ---
@@ -33,7 +34,7 @@ user_data = {}
 
 # --- 3. MODES ---
 BOT_MODES = {
-    "friendly": """Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo. Tum internet se search karke current information de sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "AI" ho.""",
+    "friendly": """Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo, Tum lumding mein rahte ho Tum Koi AI nahi ho tum Raj ke code se chalti ho, Tum Kisi bhi movie ka naam dekhkar uske bare mein Bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
     "study": """Tum ek strict Teacher ho. Sirf padhai aur education ki baatein karo. Tumhara naam Dev hai. NO TECH TALK.""",
     "funny": """Tum ek Comedian ho. Har baat ka jawab funny tarike se do. Tumhara naam Dev hai. NO TECH TALK.""",
     "roast": """Tum ek Savage Roaster ho. User ki halki bezzati (roast) karo. Tumhara naam Dev hai. NO TECH TALK.""",
@@ -43,16 +44,12 @@ BOT_MODES = {
     "math": """Tum ek Math Solver ho. Step-by-step math samjhaotumhara naam Dev hai. NO TECH TALK."""
 }
 
-# --- 4. AI SETUP (WITH GOOGLE SEARCH) ---
+# --- 4. AI SETUP ---
 if API_KEY:
     genai.configure(api_key=API_KEY)
-    
-    # YAHAN HAI MAGIC: tools='google_search_retrieval'
-    # Isse bot ab khud Google Search kar payega agar zaroorat padi to.
-    model = genai.GenerativeModel(
-        'gemini-1.5-flash',
-        tools='google_search_retrieval'
-    )
+    # Search tool hata diya kyunki wo crash kar raha tha
+    # 1.5 Flash sabse reliable hai
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- HELPER FUNCTIONS ---
 def get_user_config(user_id):
@@ -79,11 +76,11 @@ def save_to_json(question, answer):
 
 def clean_text_for_audio(text):
     try:
+        # Markdown aur Links hatana
         text = text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
         text = re.sub(r'http\S+', '', text)
+        # Emojis hatana
         text = re.sub(r'[\U00010000-\U0010ffff]', '', text) 
-        # Source citation hatana (Google search se kabhi kabhi [1] aata hai)
-        text = re.sub(r'\[\d+\]', '', text)
         return text.strip()
     except: return text
 
@@ -172,11 +169,19 @@ def handle_text(message):
         else:
             bot.send_chat_action(message.chat.id, 'typing')
             
-            # Ab humein 'Knowledge Update' ki zaroorat nahi hai
-            # Kyunki bot ke paas ab Google Search hai.
+            # --- DATE & FACT INJECTION (Most Stable Method) ---
+            # Ye kabhi fail nahi hoga
+            today_date = datetime.now().strftime("%d %B %Y")
+            
+            # Agar future mein koi badi news aaye, to bas yahan line add kar dena
+            knowledge_update = (
+                f"CONTEXT FOR AI: Aaj ki date {today_date} hai. Year 2025 hai. "
+                f"Donald Trump USA ke current President hain. "
+            )
             
             sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
-            final_prompt = f"{sys_prompt}\nUser: {text}"
+            # Prompt ko combine kiya
+            final_prompt = f"{knowledge_update}\n{sys_prompt}\nUser: {text}"
             
             chat_hist = config['history'] if config['memory'] else []
             try:
@@ -189,7 +194,7 @@ def handle_text(message):
                     config['history'].append({'role': 'user', 'parts': [f"User: {text}"]})
                     config['history'].append({'role': 'model', 'parts': [reply]})
             except Exception as e:
-                reply, source = "⚠️ API Error. Try again.", "ERROR"
+                reply, source = "⚠️ Server busy hai, thodi der baad try karna.", "ERROR"
                 print(f"Gemini Error: {e}")
 
         markup = types.InlineKeyboardMarkup()
@@ -200,7 +205,7 @@ def handle_text(message):
 
 # --- 7. RUN ---
 def run_bot():
-    print("🤖 Bot Starting with Google Search Power...")
+    print("🤖 Bot Started (Stable Version)...")
     try:
         bot.remove_webhook()
         time.sleep(1)
