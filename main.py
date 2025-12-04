@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import threading
 import time
 import json 
-import re  # <--- NEW IMPORT (Zaroori hai emojis hatane ke liye)
+import re 
 from gtts import gTTS 
 
 # --- 1. CONFIGURATION ---
@@ -18,7 +18,6 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OWNER_ID = 5804953849  
 LOG_CHANNEL_ID = -1003448442249 
 
-# Check Keys
 if not API_KEY: print("❌ ERROR: GOOGLE_API_KEY missing!")
 if not BOT_TOKEN: print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
 
@@ -26,7 +25,6 @@ if not BOT_TOKEN: print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# JSON Memory Setup
 JSON_FILE = "reply.json"
 if not os.path.exists(JSON_FILE):
     with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump({}, f)
@@ -35,7 +33,7 @@ user_data = {}
 
 # --- 3. MODES ---
 BOT_MODES = {
-    "friendly": """Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo, Tum lumding mein rahte ho Tum Koi AI nahi ho tum Raj ke code se chalti ho, Tum Kisi bhi movie ka naam dekhkar uske bare mein Bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
+    "friendly": """Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo. Tum internet se search karke current information de sakte ho. NO TECH TALK: Kabhi mat bolo ki tum "AI" ho.""",
     "study": """Tum ek strict Teacher ho. Sirf padhai aur education ki baatein karo. Tumhara naam Dev hai. NO TECH TALK.""",
     "funny": """Tum ek Comedian ho. Har baat ka jawab funny tarike se do. Tumhara naam Dev hai. NO TECH TALK.""",
     "roast": """Tum ek Savage Roaster ho. User ki halki bezzati (roast) karo. Tumhara naam Dev hai. NO TECH TALK.""",
@@ -45,10 +43,16 @@ BOT_MODES = {
     "math": """Tum ek Math Solver ho. Step-by-step math samjhaotumhara naam Dev hai. NO TECH TALK."""
 }
 
-# --- 4. AI SETUP ---
+# --- 4. AI SETUP (WITH GOOGLE SEARCH) ---
 if API_KEY:
     genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-2.0-flash')
+    
+    # YAHAN HAI MAGIC: tools='google_search_retrieval'
+    # Isse bot ab khud Google Search kar payega agar zaroorat padi to.
+    model = genai.GenerativeModel(
+        'gemini-1.5-flash',
+        tools='google_search_retrieval'
+    )
 
 # --- HELPER FUNCTIONS ---
 def get_user_config(user_id):
@@ -73,30 +77,20 @@ def save_to_json(question, answer):
         with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump(data, f, indent=4, ensure_ascii=False)
     except: pass
 
-# --- UPDATED FUNCTION TO REMOVE EMOJIS ---
 def clean_text_for_audio(text):
     try:
-        # 1. Markdown Remove (*bold*, _italic_, `code`)
         text = text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
-        
-        # 2. Links Remove (http://...) - Sunne mein ganda lagta hai
         text = re.sub(r'http\S+', '', text)
-
-        # 3. Emojis Remove (Regex)
-        # Ye pattern emojis ki range ko pakad kar delete kar dega
-        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
-        
-        # 4. Extra spaces hatana
+        text = re.sub(r'[\U00010000-\U0010ffff]', '', text) 
+        # Source citation hatana (Google search se kabhi kabhi [1] aata hai)
+        text = re.sub(r'\[\d+\]', '', text)
         return text.strip()
-    except:
-        return text
+    except: return text
 
 def text_to_speech_file(text, filename):
     try:
         clean_txt = clean_text_for_audio(text)
-        # Agar cleaning ke baad text khali ho jaye (sirf emoji tha), to default msg bole
         if not clean_txt: clean_txt = "Hmmm"
-        
         tts = gTTS(text=clean_txt, lang='hi', slow=False)
         tts.save(filename)
         return True
@@ -129,9 +123,8 @@ def handle_callbacks(call):
     config = get_user_config(user_id)
     
     if call.data == "speak_msg":
-        bot.answer_callback_query(call.id, "🎤 Processing audio...")
+        bot.answer_callback_query(call.id, "🎤 Processing...")
         filename = f"tts_{user_id}.mp3"
-        # Note: call.message.text hi AI ka reply hai
         if text_to_speech_file(call.message.text, filename):
             with open(filename, "rb") as audio: bot.send_voice(call.message.chat.id, audio)
             os.remove(filename)
@@ -148,8 +141,6 @@ def handle_callbacks(call):
         if user_id == OWNER_ID:
             with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump({}, f)
             bot.answer_callback_query(call.id, "Deleted!")
-        else:
-            bot.answer_callback_query(call.id, "Not Allowed")
 
     try:
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_settings_markup(user_id))
@@ -171,6 +162,8 @@ def handle_text(message):
     try:
         user_id = message.from_user.id
         text = message.text
+        if not text: return
+        
         config = get_user_config(user_id)
         
         saved = get_reply_from_json(text)
@@ -178,11 +171,19 @@ def handle_text(message):
             reply, source = saved, "JSON"
         else:
             bot.send_chat_action(message.chat.id, 'typing')
+            
+            # Ab humein 'Knowledge Update' ki zaroorat nahi hai
+            # Kyunki bot ke paas ab Google Search hai.
+            
+            sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
+            final_prompt = f"{sys_prompt}\nUser: {text}"
+            
             chat_hist = config['history'] if config['memory'] else []
             try:
                 chat = model.start_chat(history=chat_hist)
-                response = chat.send_message(f"{BOT_MODES[config['mode']]}\nUser: {text}")
+                response = chat.send_message(final_prompt)
                 reply, source = response.text, "AI"
+                
                 save_to_json(text, reply)
                 if config['memory']:
                     config['history'].append({'role': 'user', 'parts': [f"User: {text}"]})
@@ -199,7 +200,7 @@ def handle_text(message):
 
 # --- 7. RUN ---
 def run_bot():
-    print("🤖 Bot Starting...")
+    print("🤖 Bot Starting with Google Search Power...")
     try:
         bot.remove_webhook()
         time.sleep(1)
