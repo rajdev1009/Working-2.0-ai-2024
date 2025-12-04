@@ -180,7 +180,7 @@ def speak_callback(call):
     except Exception as e: 
         print(f"TTS Error: {e}")
 
-# --- 9. CHAT LOGIC ---
+# --- 9. CHAT LOGIC (QUOTA & FORMAT FIX) ---
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
@@ -196,34 +196,61 @@ def handle_text(message):
             ai_reply = saved_reply
             source = "JSON"
         else:
-            # AI Generation
+            # AI Generation with Error Handling (Fix 1)
             bot.send_chat_action(message.chat.id, 'typing')
             sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
             
             chat_history = config['history'] if config['memory'] else []
-            chat = model.start_chat(history=chat_history)
             
-            response = chat.send_message(f"{sys_prompt}\nUser: {user_text}")
-            ai_reply = response.text
-            source = "AI"
-            
-            save_to_json(user_text, ai_reply) 
-            
-            if config['memory']:
-                if len(config['history']) > 20: config['history'] = config['history'][2:]
-                config['history'].append({'role': 'user', 'parts': [f"{sys_prompt}\nUser: {user_text}"]})
-                config['history'].append({'role': 'model', 'parts': [ai_reply]})
+            try:
+                # Attempt to generate content
+                chat = model.start_chat(history=chat_history)
+                response = chat.send_message(f"{sys_prompt}\nUser: {user_text}")
+                ai_reply = response.text
+                source = "AI"
+                
+                # Save only if successful
+                save_to_json(user_text, ai_reply) 
+                
+                if config['memory']:
+                    if len(config['history']) > 20: config['history'] = config['history'][2:]
+                    config['history'].append({'role': 'user', 'parts': [f"{sys_prompt}\nUser: {user_text}"]})
+                    config['history'].append({'role': 'model', 'parts': [ai_reply]})
 
+            except Exception as e:
+                # Check for Quota Error (429)
+                error_str = str(e)
+                if "429" in error_str:
+                    ai_reply = "😴 **Quota Exceeded:** Raj bhai, mera aaj ka limit khatam ho gaya. Please kal try karein! (Error 429)"
+                    source = "System - Quota"
+                else:
+                    ai_reply = f"❌ **System Error:** Kuch gadbad hai.\n`{error_str}`"
+                    source = "System - Error"
+                    print(f"Gemini API Error: {e}")
+
+        # Send to Telegram (Formatting Fix - Fix 2)
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🔊 Suno", callback_data="speak_msg"))
-        bot.reply_to(message, ai_reply, parse_mode="Markdown", reply_markup=markup)
+        
+        try:
+            # Try sending with Markdown first
+            bot.reply_to(message, ai_reply, parse_mode="Markdown", reply_markup=markup)
+        except telebot.apihelper.ApiTelegramException as e:
+            # If Markdown fails (Bad Request), send as plain text
+            if "can't parse entities" in str(e):
+                print(f"Markdown Error ignored, sending plain text.")
+                bot.reply_to(message, ai_reply, parse_mode=None, reply_markup=markup)
+            else:
+                # If it's another error, print it
+                print(f"Telegram Error: {e}")
+
         send_log_to_channel(message.from_user, source, user_text, ai_reply)
 
-    except Exception as e: print(e)
+    except Exception as e: print(f"General Error: {e}")
 
 # --- RUN ---
 def run_bot():
-    print("🤖 Bot Started (Fixed TTS)...")
+    print("🤖 Bot Started (Fixed TTS + Quota Handling)...")
     bot.infinity_polling()
 
 if __name__ == "__main__":
@@ -231,4 +258,4 @@ if __name__ == "__main__":
     t.start()
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
-    
+            
