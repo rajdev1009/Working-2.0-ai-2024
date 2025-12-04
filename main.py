@@ -46,7 +46,6 @@ BOT_MODES = {
 
 # --- 4. AI & HELPER FUNCTIONS ---
 genai.configure(api_key=API_KEY)
-# Note: Model hum dynamically handle_text mein banayenge taaki system_instruction update ho sake
 
 def get_user_config(user_id):
     if user_id not in user_data:
@@ -161,7 +160,7 @@ def handle_settings_callbacks(call):
             bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=new_markup)
         except: pass
 
-# --- 8. TTS CALLBACK (FIXED) ---
+# --- 8. TTS CALLBACK ---
 @bot.callback_query_handler(func=lambda call: call.data == "speak_msg")
 def speak_callback(call):
     try:
@@ -169,7 +168,8 @@ def speak_callback(call):
         bot.send_chat_action(call.message.chat.id, 'record_audio')
         
         filename = f"tts_{call.from_user.id}.mp3"
-        clean_txt = clean_text_for_audio(call.message.text)
+        # Message text ko clean karo
+        clean_txt = clean_text_for_audio(call.message.text) if call.message.text else "Text nahi mila"
         
         if text_to_speech_file(clean_txt, filename):
             with open(filename, "rb") as audio: 
@@ -180,7 +180,7 @@ def speak_callback(call):
     except Exception as e: 
         print(f"TTS Error: {e}")
 
-# --- 9. CHAT LOGIC (OPTIMIZED & FIXED) ---
+# --- 9. CHAT LOGIC (AUTO-RESET & OPTIMIZED) ---
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
@@ -193,49 +193,58 @@ def handle_text(message):
         # 1. Check JSON Memory first
         saved_reply = get_reply_from_json(user_text)
         if saved_reply:
-            ai_reply = saved_reply
-            source = "JSON"
-        else:
-            # 2. AI Generation
-            bot.send_chat_action(message.chat.id, 'typing')
-            
-            # System instruction nikal lo
-            sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
-            
-            # History load karo
-            chat_history = config['history'] if config['memory'] else []
-            
-            # Model 1.5-flash use karo aur System Prompt yahan set karo
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("🔊 Suno", callback_data="speak_msg"))
+            bot.reply_to(message, saved_reply, parse_mode="Markdown", reply_markup=markup)
+            return
+
+        # 2. AI Generation
+        bot.send_chat_action(message.chat.id, 'typing')
+        
+        # System instruction
+        sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
+        
+        # History setup
+        chat_history = config['history'] if config['memory'] else []
+        
+        try:
+            # Model Call (Using 1.5-flash for speed & efficiency)
             model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=sys_prompt)
             chat = model.start_chat(history=chat_history)
             
-            # Sirf user ka text bhejo
+            # Send ONLY user text (System instruction handles personality)
             response = chat.send_message(user_text)
             ai_reply = response.text
-            source = "AI"
             
-            # JSON mein save karo
+            # Success - Save Data
             save_to_json(user_text, ai_reply) 
             
-            # History update (Clean tarike se)
             if config['memory']:
-                if len(config['history']) > 10: config['history'] = config['history'][2:]
+                # Memory Management: Sirf last 4 messages (2 exchanges) rakho
+                if len(config['history']) > 4: 
+                    config['history'] = config['history'][2:]
+                
                 config['history'].append({'role': 'user', 'parts': [user_text]})
                 config['history'].append({'role': 'model', 'parts': [ai_reply]})
 
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🔊 Suno", callback_data="speak_msg"))
-        bot.reply_to(message, ai_reply, parse_mode="Markdown", reply_markup=markup)
-        send_log_to_channel(message.from_user, source, user_text, ai_reply)
+            # Reply Bhejo
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("🔊 Suno", callback_data="speak_msg"))
+            bot.reply_to(message, ai_reply, parse_mode="Markdown", reply_markup=markup)
+            send_log_to_channel(message.from_user, "AI", user_text, ai_reply)
+
+        except Exception as api_error:
+            # API ERROR HANDLER (Auto-Reset)
+            print(f"API Error: {api_error}")
+            config['history'] = [] # Reset history to fix loop/crash
+            bot.reply_to(message, "⚠️ **Mera dimaag thoda hang ho gaya tha (Auto-Resetting...)**\nAb dobara puchiye, ab chalega!")
 
     except Exception as e:
-        print(f"Error: {e}")
-        # Agar quota error ho to user ko batao
-        bot.reply_to(message, "⚠️ **Server Busy:** Abhi main thoda busy hoon (Quota Exceeded). Thodi der baad try karna!")
+        print(f"General Error: {e}")
 
 # --- RUN ---
 def run_bot():
-    print("🤖 Bot Started (Stable Version)...")
+    print("🤖 Bot Started (Safe Mode)...")
     bot.infinity_polling()
 
 if __name__ == "__main__":
