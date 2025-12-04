@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 import threading
 import time
 import json 
-import re 
-from datetime import datetime 
+import re  # <--- NEW IMPORT (Zaroori hai emojis hatane ke liye)
 from gtts import gTTS 
 
 # --- 1. CONFIGURATION ---
@@ -19,6 +18,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OWNER_ID = 5804953849  
 LOG_CHANNEL_ID = -1003448442249 
 
+# Check Keys
 if not API_KEY: print("❌ ERROR: GOOGLE_API_KEY missing!")
 if not BOT_TOKEN: print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
 
@@ -26,6 +26,7 @@ if not BOT_TOKEN: print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
+# JSON Memory Setup
 JSON_FILE = "reply.json"
 if not os.path.exists(JSON_FILE):
     with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump({}, f)
@@ -47,9 +48,7 @@ BOT_MODES = {
 # --- 4. AI SETUP ---
 if API_KEY:
     genai.configure(api_key=API_KEY)
-    # Search tool hata diya kyunki wo crash kar raha tha
-    # 1.5 Flash sabse reliable hai
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
 # --- HELPER FUNCTIONS ---
 def get_user_config(user_id):
@@ -74,20 +73,30 @@ def save_to_json(question, answer):
         with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump(data, f, indent=4, ensure_ascii=False)
     except: pass
 
+# --- UPDATED FUNCTION TO REMOVE EMOJIS ---
 def clean_text_for_audio(text):
     try:
-        # Markdown aur Links hatana
+        # 1. Markdown Remove (*bold*, _italic_, `code`)
         text = text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
+        
+        # 2. Links Remove (http://...) - Sunne mein ganda lagta hai
         text = re.sub(r'http\S+', '', text)
-        # Emojis hatana
-        text = re.sub(r'[\U00010000-\U0010ffff]', '', text) 
+
+        # 3. Emojis Remove (Regex)
+        # Ye pattern emojis ki range ko pakad kar delete kar dega
+        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+        
+        # 4. Extra spaces hatana
         return text.strip()
-    except: return text
+    except:
+        return text
 
 def text_to_speech_file(text, filename):
     try:
         clean_txt = clean_text_for_audio(text)
+        # Agar cleaning ke baad text khali ho jaye (sirf emoji tha), to default msg bole
         if not clean_txt: clean_txt = "Hmmm"
+        
         tts = gTTS(text=clean_txt, lang='hi', slow=False)
         tts.save(filename)
         return True
@@ -120,8 +129,9 @@ def handle_callbacks(call):
     config = get_user_config(user_id)
     
     if call.data == "speak_msg":
-        bot.answer_callback_query(call.id, "🎤 Processing...")
+        bot.answer_callback_query(call.id, "🎤 Processing audio...")
         filename = f"tts_{user_id}.mp3"
+        # Note: call.message.text hi AI ka reply hai
         if text_to_speech_file(call.message.text, filename):
             with open(filename, "rb") as audio: bot.send_voice(call.message.chat.id, audio)
             os.remove(filename)
@@ -138,6 +148,8 @@ def handle_callbacks(call):
         if user_id == OWNER_ID:
             with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump({}, f)
             bot.answer_callback_query(call.id, "Deleted!")
+        else:
+            bot.answer_callback_query(call.id, "Not Allowed")
 
     try:
         bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_settings_markup(user_id))
@@ -159,8 +171,6 @@ def handle_text(message):
     try:
         user_id = message.from_user.id
         text = message.text
-        if not text: return
-        
         config = get_user_config(user_id)
         
         saved = get_reply_from_json(text)
@@ -168,33 +178,17 @@ def handle_text(message):
             reply, source = saved, "JSON"
         else:
             bot.send_chat_action(message.chat.id, 'typing')
-            
-            # --- DATE & FACT INJECTION (Most Stable Method) ---
-            # Ye kabhi fail nahi hoga
-            today_date = datetime.now().strftime("%d %B %Y")
-            
-            # Agar future mein koi badi news aaye, to bas yahan line add kar dena
-            knowledge_update = (
-                f"CONTEXT FOR AI: Aaj ki date {today_date} hai. Year 2025 hai. "
-                f"Donald Trump USA ke current President hain. "
-            )
-            
-            sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
-            # Prompt ko combine kiya
-            final_prompt = f"{knowledge_update}\n{sys_prompt}\nUser: {text}"
-            
             chat_hist = config['history'] if config['memory'] else []
             try:
                 chat = model.start_chat(history=chat_hist)
-                response = chat.send_message(final_prompt)
+                response = chat.send_message(f"{BOT_MODES[config['mode']]}\nUser: {text}")
                 reply, source = response.text, "AI"
-                
                 save_to_json(text, reply)
                 if config['memory']:
                     config['history'].append({'role': 'user', 'parts': [f"User: {text}"]})
                     config['history'].append({'role': 'model', 'parts': [reply]})
             except Exception as e:
-                reply, source = "⚠️ Server busy hai, thodi der baad try karna.", "ERROR"
+                reply, source = "⚠️ API Error. Try again.", "ERROR"
                 print(f"Gemini Error: {e}")
 
         markup = types.InlineKeyboardMarkup()
@@ -205,7 +199,7 @@ def handle_text(message):
 
 # --- 7. RUN ---
 def run_bot():
-    print("🤖 Bot Started (Stable Version)...")
+    print("🤖 Bot Starting...")
     try:
         bot.remove_webhook()
         time.sleep(1)
