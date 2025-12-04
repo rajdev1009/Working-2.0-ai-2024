@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import threading
 import time
 import json 
+import re  # <--- NEW IMPORT (Zaroori hai emojis hatane ke liye)
 from gtts import gTTS 
 
 # --- 1. CONFIGURATION ---
@@ -18,10 +19,8 @@ OWNER_ID = 5804953849
 LOG_CHANNEL_ID = -1003448442249 
 
 # Check Keys
-if not API_KEY:
-    print("❌ ERROR: GOOGLE_API_KEY missing!")
-if not BOT_TOKEN:
-    print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
+if not API_KEY: print("❌ ERROR: GOOGLE_API_KEY missing!")
+if not BOT_TOKEN: print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
 
 # --- 2. SETUP ---
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -74,10 +73,31 @@ def save_to_json(question, answer):
         with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump(data, f, indent=4, ensure_ascii=False)
     except: pass
 
+# --- UPDATED FUNCTION TO REMOVE EMOJIS ---
+def clean_text_for_audio(text):
+    try:
+        # 1. Markdown Remove (*bold*, _italic_, `code`)
+        text = text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
+        
+        # 2. Links Remove (http://...) - Sunne mein ganda lagta hai
+        text = re.sub(r'http\S+', '', text)
+
+        # 3. Emojis Remove (Regex)
+        # Ye pattern emojis ki range ko pakad kar delete kar dega
+        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+        
+        # 4. Extra spaces hatana
+        return text.strip()
+    except:
+        return text
+
 def text_to_speech_file(text, filename):
     try:
-        clean_text = text.replace("*", "").replace("_", "").replace("`", "")
-        tts = gTTS(text=clean_text, lang='hi', slow=False)
+        clean_txt = clean_text_for_audio(text)
+        # Agar cleaning ke baad text khali ho jaye (sirf emoji tha), to default msg bole
+        if not clean_txt: clean_txt = "Hmmm"
+        
+        tts = gTTS(text=clean_txt, lang='hi', slow=False)
         tts.save(filename)
         return True
     except: return False
@@ -111,6 +131,7 @@ def handle_callbacks(call):
     if call.data == "speak_msg":
         bot.answer_callback_query(call.id, "🎤 Processing audio...")
         filename = f"tts_{user_id}.mp3"
+        # Note: call.message.text hi AI ka reply hai
         if text_to_speech_file(call.message.text, filename):
             with open(filename, "rb") as audio: bot.send_voice(call.message.chat.id, audio)
             os.remove(filename)
@@ -179,13 +200,11 @@ def handle_text(message):
 # --- 7. RUN ---
 def run_bot():
     print("🤖 Bot Starting...")
-    # FIX FOR ERROR 409: Remove webhook before polling
     try:
         bot.remove_webhook()
         time.sleep(1)
     except: pass
     
-    # Restart on error logic
     while True:
         try:
             bot.infinity_polling(timeout=10, long_polling_timeout=5)
