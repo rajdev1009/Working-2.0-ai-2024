@@ -14,14 +14,14 @@ load_dotenv()
 
 # Yahan apni 2 alag-alag API Keys dalein
 API_KEYS = [
-    "AIzaSy...Peheli_Key_Yahan",  # <-- Pehli Key yahan paste karein
-    "AIzaSy...Dusri_Key_Yahan"    # <-- Dusri Key yahan paste karein
+    "AIzaSyAtMlcnUKg97zE1OmwOegSWTTp440E_-KY",  # <-- Pehli Key yahan paste karein
+    "AIzaSyAG0r5Rsauv9FW9giCcHCCehjjRtazbA0E"    # <-- Dusri Key yahan paste karein
 ]
 
 # Agar environment variables use kar rahe ho to ye line uncomment karo:
 # API_KEYS = [os.getenv("KEY1"), os.getenv("KEY2")]
 
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"  # <-- Bot Token yahan paste karein
+TELEGRAM_BOT_TOKEN = "8546441412:AAHyXwxr6knaYbf2cqQqRT59H0PO5WwDQq8"  # <-- Bot Token yahan paste karein
 
 # Agar .env use kar rahe ho:
 # TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
