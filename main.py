@@ -14,8 +14,8 @@ load_dotenv()
 
 # 👇 APNI KEYS YAHAN DALEIN (Dhyan se paste karein)
 API_KEYS = [
-    "YOUR_GOOGLE_API_KEY_1_HERE",  # Pehli Key
-    "YOUR_GOOGLE_API_KEY_2_HERE"   # Dusri Key
+    "AIzaSyAG0r5Rsauv9FW9giCcHCCehjjRtazbA0E",  # Pehli Key
+    "AIzaSyAtMlcnUKg97zE1OmwOegSWTTp440E_-KY"   # Dusri Key
 ]
 
 # 👇 TELEGRAM TOKEN YAHAN DALEIN
