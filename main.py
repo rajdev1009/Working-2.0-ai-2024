@@ -5,52 +5,78 @@ import google.generativeai as genai
 from flask import Flask
 from dotenv import load_dotenv
 import threading
-import time
 import json 
-import re  # <--- NEW IMPORT (Zaroori hai emojis hatane ke liye)
 from gtts import gTTS 
+import time
 
-# --- 1. CONFIGURATION ---
+# --- 1. CONFIGURATION (YAHA APNI KEYS DALEIN) ---
 load_dotenv()
 
-API_KEY = os.getenv("GOOGLE_API_KEY")
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Yahan apni 2 alag-alag API Keys dalein
+API_KEYS = [
+    "AIzaSy...Peheli_Key_Yahan",  # <-- Pehli Key yahan paste karein
+    "AIzaSy...Dusri_Key_Yahan"    # <-- Dusri Key yahan paste karein
+]
+
+# Agar environment variables use kar rahe ho to ye line uncomment karo:
+# API_KEYS = [os.getenv("KEY1"), os.getenv("KEY2")]
+
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"  # <-- Bot Token yahan paste karein
+
+# Agar .env use kar rahe ho:
+# TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 OWNER_ID = 5804953849  
 LOG_CHANNEL_ID = -1003448442249 
 
-# Check Keys
-if not API_KEY: print("❌ ERROR: GOOGLE_API_KEY missing!")
-if not BOT_TOKEN: print("❌ ERROR: TELEGRAM_BOT_TOKEN missing!")
+# --- 2. KEY ROTATION LOGIC ---
+current_key_index = 0
 
-# --- 2. SETUP ---
-bot = telebot.TeleBot(BOT_TOKEN)
+def configure_genai():
+    """Current index ke hisab se API Key set karta hai"""
+    global current_key_index
+    key = API_KEYS[current_key_index]
+    genai.configure(api_key=key)
+    print(f"🔑 Using API Key: {current_key_index + 1}")
+
+def rotate_key():
+    """Key fail hone par agli key par switch karta hai"""
+    global current_key_index
+    current_key_index = (current_key_index + 1) % len(API_KEYS)
+    configure_genai()
+    print(f"🔄 Switching to Key {current_key_index + 1}...")
+
+# Pehli baar configure karein
+configure_genai()
+
+# --- 3. SETUP ---
+bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 app = Flask(__name__)
 
-# JSON Memory Setup
+# Model Definition (Gemini 1.5 Flash - Faster & Stable)
+model_name = 'gemini-1.5-flash' 
+model = genai.GenerativeModel(model_name)
+
+# JSON Memory File
 JSON_FILE = "reply.json"
 if not os.path.exists(JSON_FILE):
     with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump({}, f)
 
 user_data = {} 
 
-# --- 3. MODES ---
+# --- 4. MODES DEFINITION ---
 BOT_MODES = {
-    "friendly": """Tumhara naam Tessa hai. Tum friendly aur cool ho. Hinglish mein baat karo, Tum lumding mein rahte ho Tum Koi AI nahi ho tum Raj Dev ke code se chalti ho, Tum Kisi bhi movie ka naam dekhkar uske bare mein Bata doge. NO TECH TALK: Kabhi mat bolo ki tum "Google Search" kar rahe ho, ya tum "AI/Language Model" ho.""",
-    "study": """Tum ek strict Teacher ho. Sirf padhai aur education ki baatein karo. Tumhara naam Tessa hai. NO TECH TALK.""",
-    "funny": """Tum ek Comedian ho. Har baat ka jawab funny tarike se do. Tumhara naam Tessa hai. NO TECH TALK.""",
-    "roast": """Tum ek Savage Roaster ho. User ki halki bezzati (roast) karo. Tumhara naam Tessa hai. NO TECH TALK.""",
-    "romantic": """Tum ek Flirty aur Romantic partner ho. Bahut pyaar se baat karo. Tumhara naam tessa hai. NO TECH TALK.""",
-    "sad": """Tum bahut udaas (sad) ho. Emotional baatein karo. Tumhara naam Tessa hai. NO TECH TALK.""",
-    "gk": """Tum General Knowledge expert ho. Jawab short aur factual do. Tumhara naam Tessa hai. NO TECH TALK.""",
-    "math": """Tum ek Math Solver ho. Step-by-step math samjhaotumhara naam Tessa hai. NO TECH TALK."""
+    "friendly": "Tumhara naam Dev hai. Tum friendly aur cool ho. Hinglish mein baat karo. Tum Raj ke code se chalti ho.",
+    "study": "Tum ek strict Teacher ho. Sirf padhai aur education ki baatein karo. Tumhara naam Dev hai.",
+    "funny": "Tum ek Comedian ho. Har baat ka jawab funny tarike se do. Tumhara naam Dev hai.",
+    "roast": "Tum ek Savage Roaster ho. User ki halki bezzati (roast) karo. Tumhara naam Dev hai.",
+    "romantic": "Tum ek Flirty aur Romantic partner ho. Bahut pyaar se baat karo. Tumhara naam Dev hai.",
+    "sad": "Tum bahut udaas (sad) ho. Emotional baatein karo. Tumhara naam Dev hai.",
+    "gk": "Tum General Knowledge expert ho. Jawab short aur factual do. Tumhara naam Dev hai.",
+    "math": "Tum ek Math Solver ho. Step-by-step math samjhaao. Tumhara naam Dev hai."
 }
 
-# --- 4. AI SETUP ---
-if API_KEY:
-    genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-2.0-flash')
-
-# --- HELPER FUNCTIONS ---
+# --- 5. HELPER FUNCTIONS ---
 def get_user_config(user_id):
     if user_id not in user_data:
         user_data[user_id] = {"mode": "friendly", "memory": True, "history": []}
@@ -64,40 +90,17 @@ def get_reply_from_json(text):
 
 def save_to_json(question, answer):
     try:
-        data = {}
-        if os.path.exists(JSON_FILE):
-             with open(JSON_FILE, "r", encoding="utf-8") as f:
-                try: data = json.load(f)
-                except: data = {}
+        with open(JSON_FILE, "r", encoding="utf-8") as f: data = json.load(f)
         data[question.lower().strip()] = answer
         with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump(data, f, indent=4, ensure_ascii=False)
     except: pass
 
-# --- UPDATED FUNCTION TO REMOVE EMOJIS ---
 def clean_text_for_audio(text):
-    try:
-        # 1. Markdown Remove (*bold*, _italic_, `code`)
-        text = text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
-        
-        # 2. Links Remove (http://...) - Sunne mein ganda lagta hai
-        text = re.sub(r'http\S+', '', text)
-
-        # 3. Emojis Remove (Regex)
-        # Ye pattern emojis ki range ko pakad kar delete kar dega
-        text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
-        
-        # 4. Extra spaces hatana
-        return text.strip()
-    except:
-        return text
+    return text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")
 
 def text_to_speech_file(text, filename):
     try:
-        clean_txt = clean_text_for_audio(text)
-        # Agar cleaning ke baad text khali ho jaye (sirf emoji tha), to default msg bole
-        if not clean_txt: clean_txt = "Hmmm"
-        
-        tts = gTTS(text=clean_txt, lang='hi', slow=False)
+        tts = gTTS(text=text, lang='hi', slow=False)
         tts.save(filename)
         return True
     except: return False
@@ -106,115 +109,172 @@ def send_log_to_channel(user, request_type, query, response):
     try:
         if LOG_CHANNEL_ID:
             config = get_user_config(user.id)
-            log_text = f"📝 **Log** | 👤 {user.first_name}\nMode: {config['mode']}\nSource: {request_type}\n❓ {query}\n🤖 {response[:100]}..."
-            bot.send_message(LOG_CHANNEL_ID, log_text)
+            bot.send_message(LOG_CHANNEL_ID, f"📝 **Log** | 👤 {user.first_name}\nMode: {config['mode']}\nKey Index: {current_key_index}\n❓ {query}\n🤖 {response}")
     except: pass
 
-# --- 5. SETTINGS & CALLBACKS ---
+# --- 6. SETTINGS PANEL ---
 def get_settings_markup(user_id):
     config = get_user_config(user_id)
+    curr_mode = config['mode']
     markup = types.InlineKeyboardMarkup(row_width=2)
+    
     buttons = []
-    for m in BOT_MODES.keys():
-        text = f"✅ {m.capitalize()}" if m == config['mode'] else f"❌ {m.capitalize()}"
+    mode_list = ["friendly", "study", "funny", "roast", "romantic", "sad", "gk", "math"]
+    for m in mode_list:
+        text = f"✅ {m.capitalize()}" if m == curr_mode else f"❌ {m.capitalize()}"
         buttons.append(types.InlineKeyboardButton(text, callback_data=f"set_mode_{m}"))
     markup.add(*buttons)
-    markup.add(types.InlineKeyboardButton(f"🧠 Memory: {'ON' if config['memory'] else 'OFF'}", callback_data="toggle_memory"))
-    markup.add(types.InlineKeyboardButton("🗑️ Clear JSON", callback_data="clear_json"))
+    
+    mem_status = "✅ ON" if config['memory'] else "❌ OFF"
+    markup.add(types.InlineKeyboardButton(f"🧠 Memory: {mem_status}", callback_data="toggle_memory"))
+    markup.add(types.InlineKeyboardButton("🗑️ Clear JSON (Owner Only)", callback_data="clear_json"))
     return markup
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callbacks(call):
+# --- 7. COMMANDS ---
+@app.route('/')
+def home(): return "✅ Dev Running!", 200
+
+@bot.message_handler(commands=['start'])
+def send_start(message):
+    bot.reply_to(message, "🔥 **Dev is Online!**\nSettings check karne ke liye /settings dabayein.")
+
+@bot.message_handler(commands=['settings'])
+def settings_menu(message):
+    markup = get_settings_markup(message.from_user.id)
+    bot.reply_to(message, "🎛️ **Control Panel**\nApna Mode select karein:", reply_markup=markup)
+
+# --- 8. CALLBACK HANDLER ---
+@bot.callback_query_handler(func=lambda call: call.data.startswith("set_mode_") or call.data == "toggle_memory" or call.data == "clear_json")
+def handle_settings_callbacks(call):
     user_id = call.from_user.id
     config = get_user_config(user_id)
-    
-    if call.data == "speak_msg":
-        bot.answer_callback_query(call.id, "🎤 Processing audio...")
-        filename = f"tts_{user_id}.mp3"
-        # Note: call.message.text hi AI ka reply hai
-        if text_to_speech_file(call.message.text, filename):
-            with open(filename, "rb") as audio: bot.send_voice(call.message.chat.id, audio)
-            os.remove(filename)
-        return
+    needs_refresh = False 
 
     if call.data.startswith("set_mode_"):
-        config['mode'] = call.data.split("_")[2]
-        config['history'] = []
-        bot.answer_callback_query(call.id, f"Mode: {config['mode']}")
+        new_mode = call.data.split("_")[2]
+        if config['mode'] != new_mode:
+            config['mode'] = new_mode
+            config['history'] = [] 
+            needs_refresh = True
+            bot.answer_callback_query(call.id, f"Mode Updated: {new_mode.upper()}")
+        else:
+            bot.answer_callback_query(call.id, "Ye Mode pehle se ON hai!")
+
     elif call.data == "toggle_memory":
         config['memory'] = not config['memory']
-        bot.answer_callback_query(call.id, "Memory Updated")
+        needs_refresh = True
+        status = "ON" if config['memory'] else "OFF"
+        bot.answer_callback_query(call.id, f"Memory: {status}")
+
     elif call.data == "clear_json":
         if user_id == OWNER_ID:
             with open(JSON_FILE, "w", encoding="utf-8") as f: json.dump({}, f)
-            bot.answer_callback_query(call.id, "Deleted!")
+            bot.answer_callback_query(call.id, "Brain Washed! 🗑️")
         else:
-            bot.answer_callback_query(call.id, "Not Allowed")
+            bot.answer_callback_query(call.id, "Sirf Owner ye kar sakta hai!")
 
+    if needs_refresh:
+        try:
+            new_markup = get_settings_markup(user_id)
+            bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=new_markup)
+        except: pass
+
+@bot.callback_query_handler(func=lambda call: call.data == "speak_msg")
+def speak_callback(call):
     try:
-        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_settings_markup(user_id))
-    except: pass
+        bot.answer_callback_query(call.id, "🎤 Generating Audio...")
+        bot.send_chat_action(call.message.chat.id, 'record_audio')
+        filename = f"tts_{call.from_user.id}.mp3"
+        clean_txt = clean_text_for_audio(call.message.text) if call.message.text else "Audio error"
+        
+        if text_to_speech_file(clean_txt, filename):
+            with open(filename, "rb") as audio: 
+                bot.send_voice(call.message.chat.id, audio)
+            os.remove(filename)
+        else:
+            bot.send_message(call.message.chat.id, "❌ Audio Error")
+    except Exception as e: print(f"TTS Error: {e}")
 
-# --- 6. COMMANDS & CHAT ---
-@app.route('/')
-def home(): return "✅ Bot Running!", 200
-
-@bot.message_handler(commands=['start', 'settings'])
-def commands(message):
-    if message.text == '/start':
-        bot.reply_to(message, "🔥 Dev is Online! /settings for menu.")
-    else:
-        bot.reply_to(message, "Settings:", reply_markup=get_settings_markup(message.from_user.id))
-
+# --- 9. MAIN CHAT LOGIC (WITH RETRY & ROTATION) ---
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
         user_id = message.from_user.id
-        text = message.text
+        user_text = message.text
+        if not user_text: return
+        
         config = get_user_config(user_id)
         
-        saved = get_reply_from_json(text)
-        if saved:
-            reply, source = saved, "JSON"
+        # 1. JSON Check
+        saved_reply = get_reply_from_json(user_text)
+        if saved_reply:
+            ai_reply = saved_reply
+            source = "JSON"
         else:
+            # 2. AI Generation with Retry Logic
             bot.send_chat_action(message.chat.id, 'typing')
-            chat_hist = config['history'] if config['memory'] else []
-            try:
-                chat = model.start_chat(history=chat_hist)
-                response = chat.send_message(f"{BOT_MODES[config['mode']]}\nUser: {text}")
-                reply, source = response.text, "AI"
-                save_to_json(text, reply)
-                if config['memory']:
-                    config['history'].append({'role': 'user', 'parts': [f"User: {text}"]})
-                    config['history'].append({'role': 'model', 'parts': [reply]})
-            except Exception as e:
-                reply, source = "⚠️ API Error. Try again.", "ERROR"
-                print(f"Gemini Error: {e}")
+            sys_prompt = BOT_MODES.get(config['mode'], BOT_MODES['friendly'])
+            chat_history = config['history'] if config['memory'] else []
+            
+            ai_reply = "Sorry, error aa raha hai."
+            source = "ERROR"
+            
+            # Retry loop (Max 3 attempts - Key Rotation)
+            for attempt in range(3):
+                try:
+                    chat = model.start_chat(history=chat_history)
+                    response = chat.send_message(f"System: {sys_prompt}\nUser: {user_text}")
+                    ai_reply = response.text
+                    source = "AI"
+                    
+                    # Agar success ho gaya, to loop se bahar niklo
+                    break 
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"⚠️ Error on Key {current_key_index + 1}: {error_msg}")
+                    
+                    # Agar 429 (Quota) error hai, to key change karo
+                    if "429" in error_msg or "quota" in error_msg.lower():
+                        print("🚫 I am busy! Rotating Key...")
+                        rotate_key()
+                        time.sleep(1) # Thoda ruko switch karne ke baad
+                        continue # Dobara try karo new key ke sath
+                    else:
+                        # Agar koi aur error hai (internet etc), to loop tod do
+                        ai_reply = "Google API connect nahi ho raha."
+                        break
 
+            # 3. History & JSON Save
+            if source == "AI":
+                if config['memory']:
+                    if len(config['history']) > 20: config['history'] = config['history'][2:]
+                    config['history'].append({'role': 'user', 'parts': [user_text]})
+                    config['history'].append({'role': 'model', 'parts': [ai_reply]})
+                save_to_json(user_text, ai_reply)
+
+        # 4. Sending Reply
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🔊 Suno", callback_data="speak_msg"))
-        bot.reply_to(message, reply, parse_mode="Markdown", reply_markup=markup)
-        send_log_to_channel(message.from_user, source, text, reply)
-    except Exception as e: print(e)
-
-# --- 7. RUN ---
-def run_bot():
-    print("🤖 Bot Starting...")
-    try:
-        bot.remove_webhook()
-        time.sleep(1)
-    except: pass
-    
-    while True:
+        
         try:
-            bot.infinity_polling(timeout=10, long_polling_timeout=5)
-        except Exception as e:
-            print(f"Polling Error: {e}")
-            time.sleep(5)
+            bot.reply_to(message, ai_reply, parse_mode="Markdown", reply_markup=markup)
+        except:
+            bot.reply_to(message, ai_reply, reply_markup=markup)
+            
+        send_log_to_channel(message.from_user, source, user_text, ai_reply)
+
+    except Exception as e:
+        print(f"❌ Critical Error: {e}")
+
+# --- RUN ---
+def run_bot():
+    print("🤖 Dev Bot Started with Key Rotation...")
+    bot.infinity_polling()
 
 if __name__ == "__main__":
     t = threading.Thread(target=run_bot)
     t.start()
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
-    
+        
