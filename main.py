@@ -61,7 +61,7 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 app = Flask(__name__)
 
 # Model Setup with Safety OFF
-model_name = 'gemini-1.5-flash' 
+model_name = 'gemini-pro' 
 model = genai.GenerativeModel(model_name, safety_settings=safe)
 
 JSON_FILE = "reply.json"
