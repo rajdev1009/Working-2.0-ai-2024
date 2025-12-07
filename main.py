@@ -19,7 +19,7 @@ API_KEYS = [
 ]
 
 # 👇 TELEGRAM TOKEN YAHAN DALEIN
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+TELEGRAM_BOT_TOKEN = "8546441412:AAGmnP2MAilRoDN4FUInDnH7QmJfc_X_wHk"
 
 # (Agar environment variables use kar rahe hain to in lines ko uncomment karein)
 # API_KEYS = [os.getenv("KEY1"), os.getenv("KEY2")]
