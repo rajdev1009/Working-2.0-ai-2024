@@ -47,7 +47,6 @@ BOT_MODES = {
 # --- 4. AI & HELPER FUNCTIONS ---
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
-
 def get_user_config(user_id):
     if user_id not in user_data:
         user_data[user_id] = {"mode": "friendly", "memory": True, "history": []}
